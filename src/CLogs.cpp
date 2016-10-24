@@ -37,6 +37,9 @@ CLogs::CLogs()
 
 	m_outCTRL = new std::ofstream();
 	m_outCTRL->open("output_CTRL.txt", std::ofstream::out);
+	
+	m_outCFSMRM_roll = new std::ofstream();
+	m_outCFSMRM_roll->open("output_CF_SMRM_roll.txt", std::ofstream::out);
 
 	m_outREF = new std::ofstream();
 	m_outREF->open("output_REF.txt", std::ofstream::out);
@@ -74,6 +77,7 @@ CLogs::~CLogs()
 	m_outCFBaro->close();
 	m_outCFStab->close();
 	m_outCFBat->close();
+	m_outCFSMRM_roll->close();
 	m_outCFExtPos->close();
 
 	m_outGoT->close();
@@ -119,6 +123,11 @@ void CLogs::CF(CCrazyflie *cflieCopter)
 		(*m_outCFBat) << cflieCopter->batTimestamp() << " " << cflieCopter->batLocalTimestamp() << " " << cflieCopter->batLevel() << " " << cflieCopter->batState() << " " << cflieCopter->batChargeCurrent() << std::endl;
 	}
 
+	if (cflieCopter->SMRM_rollNewData())
+	{
+		(*m_outCFSMRM_roll) << cflieCopter->SMRM_rollTimestamp() << " " << cflieCopter->SMRM_rollLocalTimestamp() << " " << cflieCopter->SMRM_rollX_hat() << " " << cflieCopter->SMRM_rollV_hat() << " " << cflieCopter->SMRM_rollTh_hat() << " " << cflieCopter->SMRM_rollOm_hat() << std::endl;
+	}
+	
 	if (cflieCopter->extPosNewData())
 	{
 		(*m_outCFExtPos) << cflieCopter->extPosTimestamp() << " " << cflieCopter->extPosLocalTimestamp() << " " << cflieCopter->extPosX() << " " << cflieCopter->extPosY() << " " << cflieCopter->extPosZ() << std::endl;
