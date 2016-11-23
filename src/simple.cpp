@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
 
 	double sensor_XYZ[3] = { 0,0,0 };   /* meters, meters, meters, meters */
 	double ctrl_ref_XYZ[4] = { 0,0,0,0 };  /* meters, meters, meters, meters */
-	double ctrl_cmd_RPYT[4] = { 0,0,0,0 }; /* degrees, degrees, degress, ? */
+	double ctrl_cmd_RPYT[4] = { 0,0,0,0 }; /* degrees, degrees, degress, PWM */
 	double dt;
 	bool MissingGoT = FALSE;
 
@@ -63,7 +63,6 @@ int main(int argc, char **argv) {
 		cflieCopter->cycle();
 	}
 
-
 // Quick loop to test external position data communication 
 //---------------------------------------------------------
 	//float fX, fY, fZ;
@@ -96,13 +95,23 @@ int main(int argc, char **argv) {
 
 
 	// Initialize the GoT connection 
+
 	CPositionSensor *GoT = new CPositionSensor("localhost", DEFAULT_PORT, log);
 	GoT->init();
 	GoT->giveP(ctrl_ref_XYZ);  
 
+
 	// Initialize the position controller 
 	ctrl_ref_XYZ[2] = ctrl_ref_XYZ[2] - 0.25; // take off to x meters
 	CPositionController *posController = new CPositionController(ctrl_ref_XYZ, log);
+
+	double Tc									= 4.0;				// One cycle takes Tc = E_on + E_off seconds, where for E_on seconds measurement is available, and E_off seconds unavailable
+	double E_on									= 4.0; 
+	double E_off								= Tc - E_on;
+	double ArtificialMeasurementIntermittence	= 0.0;				// 1.0 is ON, 0.0 is OFF
+	double nrCycles								= 1;				// First measurement intermittence occurs after E_on + n*Tc sec
+	double lastReceivedMeasurement				= currentTime();
+	double dtPID = 0;
 
 	double mylogtime = currentTime();
 	bool exit_loop = false;
@@ -117,20 +126,40 @@ int main(int argc, char **argv) {
 			{
 				dt = GoT->giveP(sensor_XYZ);
 
-				// Example of how to send external position data to the Crazyflie
-				// cflieCopter->setExtPosition(ctrl_ref_XYZ[0]-sensor_XYZ[0], ctrl_ref_XYZ[1]-sensor_XYZ[1], ctrl_ref_XYZ[2] - sensor_XYZ[2]);
+				double CurrentT = currentTime();
+				if (CurrentT - mylogtime > E_on + nrCycles*Tc) {			// Check if we have artificial measurement intermittence mode ON or OFF
+					ArtificialMeasurementIntermittence = 1.0;
+					nrCycles = nrCycles + 1;
+				}
+
+				if (CurrentT - mylogtime > nrCycles*Tc) {
+					ArtificialMeasurementIntermittence = 0.0;
+				}
+
+				if (ArtificialMeasurementIntermittence == 1.0) {
+					std::cout << "Artificial measurement intermittence is ON \n" << std::endl;
+				}
+				else {
+				cflieCopter->setExtPosition(sensor_XYZ[0] - ctrl_ref_XYZ[0], sensor_XYZ[1] - ctrl_ref_XYZ[1], sensor_XYZ[2] - ctrl_ref_XYZ[2]);		// Only send external position during OFF-mode of artificial measurement intermittence
+				std::cout << "Artificial measurement intermittence is OFF \n" << std::endl;
+				dtPID = currentTime() - lastReceivedMeasurement;
+				posController->update(sensor_XYZ, dtPID);					// Timeinterval for PID controller is dtPID seconds
+				posController->giveCmd(ctrl_cmd_RPYT);
+				lastReceivedMeasurement = currentTime();
+				//std::cout << "dtPID = " << dtPID << "\n" << std::endl;
+				}
 
 				posController->update(sensor_XYZ, dt);
 				posController->giveCmd(ctrl_cmd_RPYT);
 
-				cflieCopter->setRoll(ctrl_cmd_RPYT[0]);
-				cflieCopter->setPitch(-ctrl_cmd_RPYT[1]);
+				cflieCopter->setRoll(ctrl_cmd_RPYT[0]);						// Although we do not need these values for the SMRM controller, it is used in the firmware if the experiment is started or not
+				cflieCopter->setPitch(-ctrl_cmd_RPYT[1]);					// Hence, when setThrust > 1000, this indicates that we started the experiment. As a result, the estimation on the firmware starts 
 				cflieCopter->setYaw(ctrl_cmd_RPYT[2]);
 				cflieCopter->setThrust(ctrl_cmd_RPYT[3]);
 
                 if (sensor_XYZ[2] < -2.0)
                 {
-					cflieCopter->setThrust(_PID_THRUST_OFFSET*0.95);
+					cflieCopter->setThrust(_PID_THRUST_OFFSET*0.9);
 					std::cout << "---- HEIGHT SAFETY: " << sensor_XYZ[2] << " \n";
 				}
 			}
@@ -194,7 +223,7 @@ int main(int argc, char **argv) {
 			}
 
 			// Logging 
-			log->CF(cflieCopter);
+			log->CF(cflieCopter, ArtificialMeasurementIntermittence);
 
 		}
     // ----------- END MAIN CONTROL LOOP ---------------------
@@ -205,8 +234,17 @@ int main(int argc, char **argv) {
 	cflieCopter->setYaw(0);
 	cflieCopter->setThrust(0);
 
-	cflieCopter->cycle(); // to actually send it
-
+	// Do a small loop to make sure the kill engine command is sent
+	exit_loop = false;
+	double time1 = currentTime(); // seconds 
+	while ((cflieCopter->cycle()) && (!exit_loop))
+	{
+		if (currentTime() - time1 > 1.0)
+		{
+			exit_loop = true;
+		}
+	}
+	
 	mylogtime = currentTime() - mylogtime;
 	std::cout << "Run time was:" << mylogtime << " [sec].";
 

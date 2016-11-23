@@ -38,8 +38,14 @@ CLogs::CLogs()
 	m_outCTRL = new std::ofstream();
 	m_outCTRL->open("output_CTRL.txt", std::ofstream::out);
 	
+	m_outCFAltitude = new std::ofstream();
+	m_outCFAltitude->open("output_CF_Altitude.txt", std::ofstream::out);
+
 	m_outCFSMRM_roll = new std::ofstream();
 	m_outCFSMRM_roll->open("output_CF_SMRM_roll.txt", std::ofstream::out);
+
+	m_outCFSMRM_pitch = new std::ofstream();
+	m_outCFSMRM_pitch->open("output_CF_SMRM_pitch.txt", std::ofstream::out);
 
 	m_outREF = new std::ofstream();
 	m_outREF->open("output_REF.txt", std::ofstream::out);
@@ -78,6 +84,7 @@ CLogs::~CLogs()
 	m_outCFStab->close();
 	m_outCFBat->close();
 	m_outCFSMRM_roll->close();
+	m_outCFSMRM_pitch->close();
 	m_outCFExtPos->close();
 
 	m_outGoT->close();
@@ -86,7 +93,7 @@ CLogs::~CLogs()
 	m_outREF->close();
 }
 
-void CLogs::CF(CCrazyflie *cflieCopter)
+void CLogs::CF(CCrazyflie *cflieCopter, double ArtificialMeasurementIntermittence)
 {
 	if (cflieCopter->gyroNewData())
 	{
@@ -127,10 +134,20 @@ void CLogs::CF(CCrazyflie *cflieCopter)
 	{
 		(*m_outCFSMRM_roll) << cflieCopter->SMRM_rollTimestamp() << " " << cflieCopter->SMRM_rollLocalTimestamp() << " " << cflieCopter->SMRM_rollX_hat() << " " << cflieCopter->SMRM_rollV_hat() << " " << cflieCopter->SMRM_rollTh_hat() << " " << cflieCopter->SMRM_rollOm_hat() << std::endl;
 	}
-	
+
+	if (cflieCopter->SMRM_pitchNewData())
+	{
+		(*m_outCFSMRM_pitch) << cflieCopter->SMRM_pitchTimestamp() << " " << cflieCopter->SMRM_pitchLocalTimestamp() << " " << cflieCopter->SMRM_pitchX_hat() << " " << cflieCopter->SMRM_pitchV_hat() << " " << cflieCopter->SMRM_pitchTh_hat() << " " << cflieCopter->SMRM_pitchOm_hat() << std::endl;
+	}
+
 	if (cflieCopter->extPosNewData())
 	{
-		(*m_outCFExtPos) << cflieCopter->extPosTimestamp() << " " << cflieCopter->extPosLocalTimestamp() << " " << cflieCopter->extPosX() << " " << cflieCopter->extPosY() << " " << cflieCopter->extPosZ() << std::endl;
+		(*m_outCFExtPos) << cflieCopter->extPosTimestamp() << " " << cflieCopter->extPosLocalTimestamp() << " " << cflieCopter->extPosX() << " " << cflieCopter->extPosY() << " " << cflieCopter->extPosZ() << " " << ArtificialMeasurementIntermittence << std::endl;
+	}
+
+	if (cflieCopter->AltitudeNewData())
+	{
+		(*m_outCFAltitude) << cflieCopter->AltitudeTimestamp() << " " << cflieCopter->AltitudeLocalTimestamp() << " " << cflieCopter->AltitudeX_hat() << " " << cflieCopter->AltitudeV_hat() << std::endl;
 	}
 
 }
